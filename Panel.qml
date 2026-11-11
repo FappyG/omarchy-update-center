@@ -216,12 +216,22 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
+  TextMetrics {
+    id: countMetrics
+    font.family: button.fontFamily
+    font.pixelSize: button.fontSize
+    text: button.labelText
+  }
+
   BarIconButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.barCount && !vertical ? " " + root.pending : ""
-    slotSize: Style.bar.iconSlot * (root.barCount && !vertical ? (root.pending > 9 ? 2 : 1.6) : 1)
+    text: ""
+    // The count goes in labelText (like the battery percentage) so it renders
+    // at normal text size; text is fitted into the icon box and would shrink it.
+    labelText: root.barCount && !vertical ? String(root.pending) : ""
+    slotSize: Style.bar.iconSlot + (labelText !== "" ? countMetrics.advanceWidth + Style.space(4) : 0)
     opacity: root.pending > 0 || root.busy ? 1 : 0.55
     active: root.overdue && root.highlightOverdue
     tooltipText: root.opened ? "" : Model.tooltip(root.plan, root.pending, root.busy)
