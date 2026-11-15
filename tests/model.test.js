@@ -86,6 +86,7 @@ describe("status handling", () => {
 
   test("skipList follows the per-source settings", () => {
     expect(Model.skipList({ checkAur: false, checkMise: false, checkSystem: true })).toBe("aur,mise")
+    expect(Model.skipList({ checkFlatpak: false })).toBe("flatpak")
     expect(Model.skipList({})).toBe("")
   })
 })

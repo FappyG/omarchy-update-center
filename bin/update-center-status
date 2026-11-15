@@ -2,14 +2,14 @@
 
 # Collect everything Update Center shows, as one JSON document on stdout.
 #
-#   update-center-status [--skip system,aur,mise,omarchy]   full check (uses the network)
+#   update-center-status [--skip system,aur,mise,flatpak,omarchy]   full check (uses the network)
 #   update-center-status busy                                 is an update running right now?
 #
 # Each source reports {enabled, available, ok, error, packages[]}, where a
 # package is {name, from, to}. A source that fails keeps ok=false and its
 # error text; the panel keeps the previous result for it. Nothing here needs
-# root: checkupdates syncs into a temporary database, yay -Qua and mise only
-# read.
+# root: checkupdates syncs into a temporary database, and yay -Qua, mise and
+# flatpak remote-ls only read.
 
 set -uo pipefail
 
@@ -128,6 +128,45 @@ check_mise() {
   rm -f "$err"
 }
 
+# Apps and runtimes with a newer build on their remote, across the system and
+# user installations. remote-ls gives the new version; flatpak list gives the
+# installed one. Runtimes often carry no version, or keep the same version for
+# a rebuild, so those fall back to the branch and "new build".
+check_flatpak() {
+  if ! command -v flatpak >/dev/null; then
+    source_json true false true "" '[]'
+    return
+  fi
+
+  local out err status installed packages
+  err=$(mktemp)
+  out=$(timeout "$CHECK_TIMEOUT" flatpak remote-ls --updates --columns=application,branch,version 2>"$err")
+  status=$?
+
+  if ((status == 124)); then
+    source_json true true false "Timed out checking Flatpak apps" '[]'
+  elif ((status != 0)); then
+    source_json true true false "$(first_line "$(cat "$err")" || echo "flatpak remote-ls failed")" '[]'
+  else
+    installed=$(flatpak list --columns=application,branch,version 2>/dev/null)
+    packages=$(jq -n -c --arg updates "$out" --arg installed "$installed" '
+      def rows: split("\n") | map(select(length > 0) | split("\t") | {id: .[0], branch: (.[1] // ""), version: (.[2] // "")});
+      ($installed | rows | map({key: "\(.id)/\(.branch)", value: .version}) | from_entries) as $current
+      | $updates | rows
+      | map(
+          ($current["\(.id)/\(.branch)"] // "") as $from
+          | {
+              name: .id,
+              from: (if $from != "" then $from else .branch end),
+              to: (if .version != "" and .version != $from then .version else "new build" end)
+            }
+        )
+    ')
+    source_json true true true "" "$packages"
+  fi
+  rm -f "$err"
+}
+
 disabled_json() { source_json false false true "" '[]'; }
 
 full_check() {
@@ -136,7 +175,7 @@ full_check() {
   trap 'rm -rf "$tmp"' EXIT
 
   # The checks are independent network round-trips; run them side by side.
-  for source in system aur mise; do
+  for source in system aur mise flatpak; do
     if [[ $skip == *",$source,"* ]]; then
       disabled_json >"$tmp/$source" &
     else
@@ -158,7 +197,8 @@ full_check() {
     --argjson omarchyInstalled "$({ pacman -Qq omarchy || pacman -Qq omarchy-dev; } >/dev/null 2>&1 && echo true || echo false)" \
     --slurpfile system "$tmp/system" \
     --slurpfile aur "$tmp/aur" \
-    --slurpfile mise "$tmp/mise" '
+    --slurpfile mise "$tmp/mise" \
+    --slurpfile flatpak "$tmp/flatpak" '
     def is_omarchy: .name == "omarchy" or .name == "omarchy-dev";
     ($system[0]) as $sys
     | {
@@ -169,6 +209,7 @@ full_check() {
           system: ($sys | .packages |= map(select(is_omarchy | not))),
           aur: $aur[0],
           mise: $mise[0],
+          flatpak: $flatpak[0],
           omarchy: {
             enabled: $omarchyEnabled,
             available: ($omarchyInstalled and $sys.enabled),
@@ -192,7 +233,7 @@ case "${1:-}" in
     full_check ""
     ;;
   *)
-    echo "Usage: update-center-status [--skip system,aur,mise,omarchy] | busy" >&2
+    echo "Usage: update-center-status [--skip system,aur,mise,flatpak,omarchy] | busy" >&2
     exit 2
     ;;
 esac

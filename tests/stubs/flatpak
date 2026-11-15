@@ -1,0 +1,11 @@
+#!/bin/bash
+# Fake flatpak: `remote-ls --updates` prints STUB_FLATPAK_UPDATES (exit
+# STUB_FLATPAK_EXIT, stderr STUB_FLATPAK_ERR); `list` prints STUB_FLATPAK_LIST.
+case $1 in
+  remote-ls)
+    printf '%b' "${STUB_FLATPAK_UPDATES:-}"
+    [[ -n ${STUB_FLATPAK_ERR:-} ]] && echo "$STUB_FLATPAK_ERR" >&2
+    exit "${STUB_FLATPAK_EXIT:-0}"
+    ;;
+  list) printf '%b' "${STUB_FLATPAK_LIST:-}" ;;
+esac

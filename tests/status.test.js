@@ -24,7 +24,7 @@ beforeAll(() => {
   }
 })
 
-function run(env = {}, args = [], { withTools = ["checkupdates", "yay", "mise", "pacman"] } = {}) {
+function run(env = {}, args = [], { withTools = ["checkupdates", "yay", "mise", "flatpak", "pacman"] } = {}) {
   for (const tool of withTools) {
     try { symlinkSync(join(stubs, tool), join(binDir, tool)) } catch {}
   }
@@ -68,7 +68,7 @@ describe("update-center-status", () => {
 
   test("nothing pending is ok everywhere, including yay's exit 1", () => {
     const { json } = run()
-    for (const key of ["system", "aur", "mise", "omarchy"]) {
+    for (const key of ["system", "aur", "mise", "flatpak", "omarchy"]) {
       expect(json.sources[key]).toMatchObject({ ok: true, packages: [] })
     }
   })
@@ -87,10 +87,31 @@ describe("update-center-status", () => {
     expect(json.sources.mise.ok).toBe(true)
   })
 
+  test("flatpak updates pair the new version with the installed one", () => {
+    const { json } = run({
+      STUB_FLATPAK_UPDATES: "com.bambulab.BambuStudio\tstable\t2.9.0.10\norg.gnome.Platform\t50\t\norg.freedesktop.Platform.GL.default\t25.08\t26.2.5\n",
+      STUB_FLATPAK_LIST: "com.bambulab.BambuStudio\tstable\t2.8.2.61\norg.gnome.Platform\t50\t\norg.freedesktop.Platform.GL.default\t25.08\t26.2.5\n",
+    })
+    expect(json.sources.flatpak).toMatchObject({ enabled: true, available: true, ok: true })
+    expect(json.sources.flatpak.packages).toEqual([
+      { name: "com.bambulab.BambuStudio", from: "2.8.2.61", to: "2.9.0.10" },
+      { name: "org.gnome.Platform", from: "50", to: "new build" },
+      { name: "org.freedesktop.Platform.GL.default", from: "26.2.5", to: "new build" },
+    ])
+  })
+
+  test("a failing flatpak check reports its error", () => {
+    const { json } = run({ STUB_FLATPAK_EXIT: "1", STUB_FLATPAK_ERR: "error: Unable to load summary from remote flathub" })
+    expect(json.sources.flatpak.ok).toBe(false)
+    expect(json.sources.flatpak.error).toContain("Unable to load summary")
+    expect(json.sources.system.ok).toBe(true)
+  })
+
   test("--skip disables sources without running them", () => {
-    const { json } = run({ STUB_MISE_EXIT: "1" }, ["--skip", "aur,mise"])
+    const { json } = run({ STUB_MISE_EXIT: "1", STUB_FLATPAK_EXIT: "1" }, ["--skip", "aur,mise,flatpak"])
     expect(json.sources.aur.enabled).toBe(false)
     expect(json.sources.mise).toMatchObject({ enabled: false, ok: true })
+    expect(json.sources.flatpak).toMatchObject({ enabled: false, ok: true })
     expect(json.sources.system.enabled).toBe(true)
   })
 
@@ -106,6 +127,7 @@ describe("update-center-status", () => {
     const json = JSON.parse(proc.stdout.toString())
     expect(json.sources.aur).toMatchObject({ available: false, ok: true })
     expect(json.sources.mise).toMatchObject({ available: false, ok: true })
+    expect(json.sources.flatpak).toMatchObject({ available: false, ok: true })
     expect(json.sources.omarchy.available).toBe(false)
   })
 

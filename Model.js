@@ -5,6 +5,7 @@ var SOURCES = [
   { key: "system", label: "System", setting: "checkSystem" },
   { key: "aur", label: "AUR", setting: "checkAur" },
   { key: "mise", label: "mise", setting: "checkMise" },
+  { key: "flatpak", label: "Flatpak", setting: "checkFlatpak" },
   { key: "omarchy", label: "Omarchy", setting: "checkOmarchy" }
 ]
 
