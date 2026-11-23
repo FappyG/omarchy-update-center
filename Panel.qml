@@ -27,7 +27,7 @@ Panel {
     var a = Model.updateArgs(status)
     return a.length > 0 ? a : ["--system"]
   }
-  readonly property string updateCommand: "omarchy-launch-floating-terminal-with-presentation " + updateScript + " " + updateArgs.join(" ")
+  readonly property string updateCommand: "omarchy-launch-floating-terminal-with-presentation " + Model.shellQuote(Model.shellQuote(updateScript)) + " " + updateArgs.join(" ")
 
   readonly property int reminderDays: Math.max(1, setting("reminderDays", 7))
   readonly property int checkIntervalHours: Math.max(1, setting("checkIntervalHours", 6))
@@ -99,7 +99,7 @@ Panel {
       "omarchy-notification-send", "-g", "", "-u", "normal",
       "Time to update",
       Model.notificationBody(root.now, root.lastUpdate, root.pending),
-      "--exec", "omarchy-launch-floating-terminal-with-presentation", root.updateScript
+      "--exec", "omarchy-launch-floating-terminal-with-presentation", Model.shellQuote(root.updateScript)
     ].concat(root.updateArgs))
     rememberReminder(Math.floor(root.now))
   }

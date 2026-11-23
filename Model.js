@@ -204,6 +204,13 @@ function notificationBody(now, lastUpdate, pending) {
 }
 
 // Flags for bin/update-all: which kinds of update are actually waiting.
+// Single-quote a word for a shell. The update command passes through a shell
+// more than once (the launcher re-reads its arguments), so callers quote once
+// per shell; this keeps a plugin path with spaces or quotes intact.
+function shellQuote(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'"
+}
+
 function updateArgs(status) {
   var rows = groups(status)
   var system = false, plugins = false
@@ -228,6 +235,6 @@ if (typeof module !== "undefined") {
     SOURCES: SOURCES, parseStatus: parseStatus, mergeStatus: mergeStatus, groups: groups,
     pendingCount: pendingCount, reminderCount: reminderCount, hasErrors: hasErrors, skipList: skipList, reminderPlan: reminderPlan,
     duration: duration, ago: ago, when: when, headline: headline, reminderRow: reminderRow,
-    notificationBody: notificationBody, tooltip: tooltip, updateArgs: updateArgs
+    notificationBody: notificationBody, tooltip: tooltip, updateArgs: updateArgs, shellQuote: shellQuote
   }
 }

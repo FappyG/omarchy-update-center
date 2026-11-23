@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeAll } from "bun:test"
-import { existsSync, mkdtempSync, writeFileSync, symlinkSync, mkdirSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, symlinkSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -203,6 +203,18 @@ describe("update-center-status", () => {
       commit(p.upstream, "new-file", "1")
       expect(check(root).packages).toHaveLength(1)
       expect(existsSync(join(p.checkout, "new-file"))).toBe(false)
+    })
+
+    test("checking leaves FETCH_HEAD alone, so a plugin update in progress merges what it showed", () => {
+      const root = pluginsRoot()
+      const p = plugin(root, "behind")
+      commit(p.upstream, "a", "1")
+      git(p.checkout, "fetch", "-q", "origin", "HEAD")
+      const fetchHead = () => readFileSync(join(p.checkout, ".git", "FETCH_HEAD"), "utf8")
+      const shown = fetchHead()
+      commit(p.upstream, "b", "2")
+      expect(check(root).packages).toEqual([{ name: "behind", from: "1.2.3", to: "2 new changes" }])
+      expect(fetchHead()).toBe(shown)
     })
 
     test("a plugin with local edits says so", () => {

@@ -198,3 +198,15 @@ describe("shell plugins", () => {
     expect(Model.updateArgs(status({ system: source([pkg("linux")]), plugins: source([edited("b.widget")]) }))).toEqual(["--system"])
   })
 })
+
+describe("shellQuote", () => {
+  test("survives one shell per quoting, spaces and quotes included", () => {
+    const path = "/home/a b/it's/bin/update-all"
+    const once = Bun.spawnSync(["bash", "-c", "printf %s " + Model.shellQuote(path)]).stdout.toString()
+    expect(once).toBe(path)
+    const twice = Model.shellQuote(Model.shellQuote(path))
+    const inner = Bun.spawnSync(["bash", "-c", "printf %s " + twice]).stdout.toString()
+    const outer = Bun.spawnSync(["bash", "-c", "printf %s " + inner]).stdout.toString()
+    expect(outer).toBe(path)
+  })
+})
