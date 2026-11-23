@@ -213,37 +213,65 @@ Panel {
     onTriggered: root.now = Date.now() / 1000
   }
 
-  implicitWidth: button.implicitWidth
+  // The count sits after the icon. BarIconButton can only draw a label before
+  // its glyph, and anything in `text` is fitted into the icon box (shrinking
+  // both, #12), so the count is its own bar button. The bar routes clicks to
+  // whichever registered button is under the pointer, so both act the same.
+  readonly property string countText: root.barCount && !button.vertical ? String(root.pending) : ""
+  // Gap between the glyph and the count. The count repeats the icon slot's
+  // side padding after itself, so the widget stays balanced.
+  readonly property real countGap: Style.space(4)
+  readonly property real iconPad: (Style.bar.iconSlot - Style.bar.iconCanvas) / 2
+
+  implicitWidth: countText !== "" ? countButton.x + countButton.width : button.implicitWidth
   implicitHeight: button.implicitHeight
+
+  function press(b) {
+    if (b === Qt.RightButton) root.check()
+    else root.toggle()
+  }
 
   TextMetrics {
     id: countMetrics
-    font.family: button.fontFamily
-    font.pixelSize: button.fontSize
-    text: button.labelText
+    font.family: countButton.fontFamily
+    font.pixelSize: countButton.fontSize
+    text: root.countText
   }
 
   BarIconButton {
     id: button
-    anchors.fill: parent
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
     bar: root.bar
     text: ""
-    // The count goes in labelText (like the battery percentage) so it renders
-    // at normal text size; text is fitted into the icon box and would shrink it.
-    labelText: root.barCount && !vertical ? String(root.pending) : ""
-    slotSize: Style.bar.iconSlot + (labelText !== "" ? countMetrics.advanceWidth + Style.space(4) : 0)
     opacity: root.pending > 0 || root.busy ? 1 : 0.55
     active: root.overdue && root.highlightOverdue
     tooltipText: root.opened ? "" : Model.tooltip(root.plan, root.pending, root.busy)
-    onPressed: function(b) {
-      if (b === Qt.RightButton) root.check()
-      else root.toggle()
-    }
+    onPressed: function(b) { root.press(b) }
+  }
+
+  WidgetButton {
+    id: countButton
+    // The text is centred in the button, so with iconPad on both sides of it
+    // the button starts iconPad before where the count should begin: a gap
+    // after the glyph, which ends at iconPad + iconCanvas.
+    x: Style.bar.iconCanvas + root.countGap
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    bar: root.bar
+    text: root.countText
+    fontSize: Style.bar.iconFont
+    fixedWidth: countMetrics.advanceWidth + root.iconPad * 2
+    active: button.active
+    tooltipText: button.tooltipText
+    onPressed: function(b) { root.press(b) }
   }
 
   KeyboardPanel {
     id: panel
-    anchorItem: button
+    // The whole widget, icon and count, as when the count was a label.
+    anchorItem: root
     owner: root
     bar: root.bar
     open: root.opened
