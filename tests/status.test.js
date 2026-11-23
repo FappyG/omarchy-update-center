@@ -60,7 +60,10 @@ describe("update-center-status", () => {
   test("mise tools that were never installed don't count as pending", () => {
     const { json } = run({
       STUB_MISE_OUT:
-        '{"node":{"current":"26.12.1","latest":"26.13.0","requested":"latest"},"amp":{"current":null,"latest":"0.0.1","requested":"latest"}}',
+        '{"node":{"current":"26.12.1","latest":"26.13.0","requested":"latest"},' +
+        '"amp":{"current":null,"latest":"0.0.1","requested":"latest"},' +
+        '"crush":{"current":"","latest":"1.2.0","requested":"latest"},' +
+        '"qwen":{"latest":"0.9.0","requested":"latest"}}',
     })
     expect(json.sources.mise.ok).toBe(true)
     expect(json.sources.mise.packages).toEqual([{ name: "node", from: "26.12.1", to: "26.13.0" }])
