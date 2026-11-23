@@ -78,6 +78,21 @@ describe("status handling", () => {
     expect(Model.hasErrors(merged)).toBe(true)
   })
 
+  test("a partial failure uses its fresh packages and keeps the error shown", () => {
+    // One plugin unreachable for good must not freeze the list: after a.widget
+    // was updated, it drops off even though gone.widget still fails.
+    const prev = { sources: { ...status.sources, plugins: source([pkg("a.widget"), pkg("b.widget")]) } }
+    const plugins = source([pkg("b.widget")], { ok: false, error: "Couldn't reach: gone.widget", partial: true })
+    const merged = Model.mergeStatus(prev, { sources: { ...status.sources, plugins } })
+    expect(merged.sources.plugins.packages.map((p) => p.name)).toEqual(["b.widget"])
+    expect(merged.sources.plugins).toMatchObject({ ok: false, error: "Couldn't reach: gone.widget" })
+    expect(merged.sources.plugins.stale).toBeUndefined()
+    expect(Model.hasErrors(merged)).toBe(true)
+    // The error alone never reminds: plugins are out of the reminder count.
+    expect(Model.reminderCount(merged)).toBe(3)
+    expect(Model.pendingCount(merged)).toBe(4)
+  })
+
   test("parseStatus rejects junk", () => {
     expect(Model.parseStatus("not json")).toBeNull()
     expect(Model.parseStatus("{}")).toBeNull()
@@ -189,6 +204,30 @@ describe("shell plugins", () => {
     const s = status({ plugins: source([pkg("a.widget"), edited("b.widget")]) })
     expect(Model.groups(s).find((g) => g.key === "plugins").packages).toHaveLength(2)
     expect(Model.pendingCount(s)).toBe(1)
+  })
+
+  test("a plugin with commits of its own is listed but not counted, nor updated", () => {
+    const diverged = pkg("c.widget", { to: "1 new change, has local commits", localCommits: true })
+    const s = status({ plugins: source([pkg("a.widget"), diverged]) })
+    expect(Model.groups(s).find((g) => g.key === "plugins").packages).toHaveLength(2)
+    expect(Model.pendingCount(s)).toBe(1)
+    expect(Model.updateArgs(status({ plugins: source([diverged]) }))).toEqual([])
+  })
+
+  test("the Plugins group's own number matches the badge", () => {
+    const diverged = pkg("c.widget", { localCommits: true })
+    const s = status({ plugins: source([pkg("a.widget"), edited("b.widget"), diverged]) })
+    const group = Model.groups(s).find((g) => g.key === "plugins")
+    expect(group.packages).toHaveLength(3)
+    expect(group.count).toBe(1)
+    expect(Model.groupSummary(group)).toBe("1")
+    expect(Model.pendingCount(s)).toBe(1)
+    const none = Model.groups(status({ plugins: source([edited("b.widget")]) })).find((g) => g.key === "plugins")
+    expect(Model.groupSummary(none)).toBe("0")
+    const failed = { ...group, ok: false }
+    expect(Model.groupSummary(failed)).toBe("1 · couldn't check")
+    expect(Model.groupSummary({ ...group, packages: [], count: 0 })).toBe("up to date")
+    expect(Model.groupSummary({ ...group, packages: [], count: 0, ok: false })).toBe("couldn't check")
   })
 
   test("only edited plugins waiting: nothing counts and Update now has nothing to do", () => {

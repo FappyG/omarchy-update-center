@@ -18,4 +18,9 @@ describe("Panel wiring", () => {
     expect(qml).toMatch(/Model\.reminderPlan\(now, lastUpdate, lastReminderAt, remindable,/)
     expect(qml).toMatch(/property int remindable: Model\.reminderCount\(status\)/)
   })
+
+  test("group rows show the model's count, not every listed package", () => {
+    expect(qml).toMatch(/text: Model\.groupSummary\(group\.modelData\)/)
+    expect(qml).not.toMatch(/String\(g\.packages\.length\)/)
+  })
 })

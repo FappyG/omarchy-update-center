@@ -233,8 +233,37 @@ describe("update-center-status", () => {
       commit(p.upstream, "a", "1")
       const source = check(root)
       expect(source.ok).toBe(false)
+      expect(source.partial).toBe(true)
       expect(source.error).toBe("Couldn't reach: gone")
       expect(source.packages.map(x => x.name)).toEqual(["behind"])
+    })
+
+    test("when no plugin can be reached the result is not partial", () => {
+      const root = pluginsRoot()
+      const gone = plugin(root, "gone")
+      git(gone.checkout, "remote", "set-url", "origin", join(root, "does-not-exist"))
+      const source = check(root)
+      expect(source).toMatchObject({ ok: false, error: "Couldn't reach: gone", packages: [] })
+      expect(source.partial).toBeUndefined()
+    })
+
+    test("a plugin with commits of its own says so and is flagged", () => {
+      const root = pluginsRoot()
+      const p = plugin(root, "forked")
+      commit(p.upstream, "a", "1")
+      commit(p.checkout, "mine", "local")
+      const pkg = check(root).packages[0]
+      expect(pkg).toMatchObject({ name: "forked", to: "1 new change, has local commits", localCommits: true })
+      expect(pkg.localEdits).toBeUndefined()
+    })
+
+    test("an untracked file alone is not a local edit", () => {
+      const root = pluginsRoot()
+      const p = plugin(root, "cached")
+      commit(p.upstream, "a", "1")
+      mkdirSync(join(p.checkout, "__pycache__"))
+      writeFileSync(join(p.checkout, "__pycache__", "x.pyc"), "")
+      expect(check(root).packages).toEqual([{ name: "cached", from: "1.2.3", to: "1 new change" }])
     })
 
     test("folders that are not git checkouts are ignored", () => {

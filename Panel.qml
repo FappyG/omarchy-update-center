@@ -433,11 +433,7 @@ Panel {
                     horizontalAlignment: Text.AlignRight
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
-                    text: {
-                      var g = group.modelData
-                      if (!g.ok) return (g.packages.length > 0 ? g.packages.length + " · " : "") + "couldn't check"
-                      return g.packages.length > 0 ? String(g.packages.length) : "up to date"
-                    }
+                    text: Model.groupSummary(group.modelData)
                     color: !group.modelData.ok ? root.urgent : (group.canExpand ? root.foreground : root.muted)
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.bodySmall

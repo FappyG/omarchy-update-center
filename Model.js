@@ -24,7 +24,9 @@ function parseStatus(text) {
 
 // Fold a fresh check into the previous one: a source that failed this time
 // keeps the packages it last reported, so a flaky network never makes pending
-// updates look like they vanished.
+// updates look like they vanished. A partial failure (some plugins checked,
+// others unreachable) is a fresh answer for what it did check: its packages
+// are used as they are and its error stays shown.
 function mergeStatus(previous, next) {
   if (!next) return previous
   if (!previous || !previous.sources) return next
@@ -32,7 +34,7 @@ function mergeStatus(previous, next) {
   for (var key in next.sources) {
     var fresh = next.sources[key]
     var old = previous.sources[key]
-    merged.sources[key] = !fresh.ok && old && old.packages
+    merged.sources[key] = !fresh.ok && fresh.partial !== true && old && old.packages
       ? Object.assign({}, fresh, { packages: old.packages, stale: true })
       : fresh
   }
@@ -46,22 +48,25 @@ function groups(status) {
   for (var i = 0; i < SOURCES.length; i++) {
     var source = status.sources[SOURCES[i].key]
     if (!source || !source.enabled || !source.available) continue
+    var packages = source.packages || []
     rows.push({
       key: SOURCES[i].key,
       label: SOURCES[i].label,
       ok: source.ok,
       error: source.error || "",
-      packages: source.packages || []
+      packages: packages,
+      // What the group row shows: only what Update now can clear.
+      count: countUpdatable(packages)
     })
   }
   return rows
 }
 
 // Whether "Update now" can apply a listed update. A plugin with local edits
-// is listed with a note, but omarchy-plugin-update may refuse it, so it never
-// counts as waiting.
+// or commits of its own is listed with a note, but omarchy-plugin-update only
+// fast-forwards a clean checkout, so it never counts as waiting.
 function updatable(pkg) {
-  return !(pkg && pkg.localEdits === true)
+  return !(pkg && (pkg.localEdits === true || pkg.localCommits === true))
 }
 
 function countUpdatable(packages) {
@@ -74,8 +79,16 @@ function countUpdatable(packages) {
 function pendingCount(status) {
   var rows = groups(status)
   var total = 0
-  for (var i = 0; i < rows.length; i++) total += countUpdatable(rows[i].packages)
+  for (var i = 0; i < rows.length; i++) total += rows[i].count
   return total
+}
+
+// The group row's number, next to its label. Listed plugins that Update now
+// can't clear show as 0, matching the badge.
+function groupSummary(group) {
+  var n = group.packages.length > 0 ? String(group.count) : ""
+  if (!group.ok) return (n !== "" ? n + " · " : "") + "couldn't check"
+  return n !== "" ? n : "up to date"
 }
 
 // What the overdue reminder counts: the same, minus shell plugins. Plugins
@@ -84,7 +97,7 @@ function reminderCount(status) {
   var rows = groups(status)
   var total = 0
   for (var i = 0; i < rows.length; i++) {
-    if (rows[i].key !== "plugins") total += countUpdatable(rows[i].packages)
+    if (rows[i].key !== "plugins") total += rows[i].count
   }
   return total
 }
@@ -215,7 +228,7 @@ function updateArgs(status) {
   var rows = groups(status)
   var system = false, plugins = false
   for (var i = 0; i < rows.length; i++) {
-    if (countUpdatable(rows[i].packages) === 0) continue
+    if (rows[i].count === 0) continue
     if (rows[i].key === "plugins") plugins = true
     else system = true
   }
@@ -233,7 +246,7 @@ function tooltip(plan, pending, busy) {
 if (typeof module !== "undefined") {
   module.exports = {
     SOURCES: SOURCES, parseStatus: parseStatus, mergeStatus: mergeStatus, groups: groups,
-    pendingCount: pendingCount, reminderCount: reminderCount, hasErrors: hasErrors, skipList: skipList, reminderPlan: reminderPlan,
+    pendingCount: pendingCount, groupSummary: groupSummary, reminderCount: reminderCount, hasErrors: hasErrors, skipList: skipList, reminderPlan: reminderPlan,
     duration: duration, ago: ago, when: when, headline: headline, reminderRow: reminderRow,
     notificationBody: notificationBody, tooltip: tooltip, updateArgs: updateArgs, shellQuote: shellQuote
   }
