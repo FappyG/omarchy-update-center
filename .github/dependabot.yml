@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Keeps the commit-pinned actions in .github/workflows current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      # Dependabot has no fortnightly interval; the 1st and 15th is the closest.
+      interval: cron
+      cronjob: "0 9 1,15 * *"
+      timezone: Europe/London
+    groups:
+      actions:
+        patterns:
+          - "*"

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only token. Never switch to pull_request_target: it runs fork code with this repo's secrets.
+permissions:
+  contents: read
+
+# A new push to a PR cancels its older run; runs on main always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # omarchy-plugin-validate from Omarchy v4.5.0, checked against its hash before running.
+  OMARCHY_COMMIT: ac2690cd7be4f47e4a255f5e2e78d904d436b068
+  VALIDATOR_SHA256: b6f6aba33a329a5ccd339050fbb2ce82272b791dd1f0d6a28c1837caa035b8c4
+
+jobs:
+  check:
+    # This job name is the required status check on main; renaming it means updating the ruleset.
+    name: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.5
+
+      - name: Tests
+        run: bun test
+
+      - name: ShellCheck
+        run: shellcheck bin/* tests/stubs/*
+
+      - name: Validate manifest
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/omarchy-plugin-validate" \
+            "https://raw.githubusercontent.com/omacom/omarchy/$OMARCHY_COMMIT/bin/omarchy-plugin-validate"
+          echo "$VALIDATOR_SHA256  $RUNNER_TEMP/omarchy-plugin-validate" | sha256sum -c -
+          bash "$RUNNER_TEMP/omarchy-plugin-validate" .
