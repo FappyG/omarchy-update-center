@@ -44,7 +44,10 @@ To get it back, run `omarchy plugin enable omarchy.system-update`.
 
 ```bash
 omarchy plugin update liambeck99.update-center
+omarchy-restart-shell
 ```
+
+The shell keeps running the old version of the widget until it restarts, so restart it (or log out and back in) after updating.
 
 ## Uninstall
 
