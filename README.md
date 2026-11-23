@@ -116,6 +116,8 @@ bun test                       # logic and status-script tests (stubbed tools, n
 bin/update-center-status | jq  # what the panel sees
 ```
 
+CI runs the tests, [ShellCheck](https://www.shellcheck.net) on `bin/` and `tests/stubs/`, and `omarchy-plugin-validate` on every pull request. Changes reach `main` only through a pull request with a passing check.
+
 Saving files under `~/.config/omarchy/plugins/` hot-reloads the plugin, but the shell can keep the previously compiled QML and `Model.js`. If a change doesn't show up, run `omarchy-restart-shell`.
 
 ## License
