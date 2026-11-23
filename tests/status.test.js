@@ -210,7 +210,7 @@ describe("update-center-status", () => {
       const p = plugin(root, "edited")
       commit(p.upstream, "a", "1")
       writeFileSync(join(p.checkout, "manifest.json"), '{"version":"1.2.3","local":true}')
-      expect(check(root).packages[0].to).toBe("1 new change, has local edits")
+      expect(check(root).packages[0]).toMatchObject({ to: "1 new change, has local edits", localEdits: true })
     })
 
     test("an unreachable plugin is named without hiding the others", () => {

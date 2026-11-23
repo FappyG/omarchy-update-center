@@ -57,10 +57,35 @@ function groups(status) {
   return rows
 }
 
+// Whether "Update now" can apply a listed update. A plugin with local edits
+// is listed with a note, but omarchy-plugin-update may refuse it, so it never
+// counts as waiting.
+function updatable(pkg) {
+  return !(pkg && pkg.localEdits === true)
+}
+
+function countUpdatable(packages) {
+  var n = 0
+  for (var i = 0; i < packages.length; i++) if (updatable(packages[i])) n++
+  return n
+}
+
+// The waiting total behind the bar count, the headline and "Update now".
 function pendingCount(status) {
   var rows = groups(status)
   var total = 0
-  for (var i = 0; i < rows.length; i++) total += rows[i].packages.length
+  for (var i = 0; i < rows.length; i++) total += countUpdatable(rows[i].packages)
+  return total
+}
+
+// What the overdue reminder counts: the same, minus shell plugins. Plugins
+// still show and count in the badge, but never make you overdue on their own.
+function reminderCount(status) {
+  var rows = groups(status)
+  var total = 0
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].key !== "plugins") total += countUpdatable(rows[i].packages)
+  }
   return total
 }
 
@@ -183,7 +208,7 @@ function updateArgs(status) {
   var rows = groups(status)
   var system = false, plugins = false
   for (var i = 0; i < rows.length; i++) {
-    if (rows[i].packages.length === 0) continue
+    if (countUpdatable(rows[i].packages) === 0) continue
     if (rows[i].key === "plugins") plugins = true
     else system = true
   }
@@ -201,7 +226,7 @@ function tooltip(plan, pending, busy) {
 if (typeof module !== "undefined") {
   module.exports = {
     SOURCES: SOURCES, parseStatus: parseStatus, mergeStatus: mergeStatus, groups: groups,
-    pendingCount: pendingCount, hasErrors: hasErrors, skipList: skipList, reminderPlan: reminderPlan,
+    pendingCount: pendingCount, reminderCount: reminderCount, hasErrors: hasErrors, skipList: skipList, reminderPlan: reminderPlan,
     duration: duration, ago: ago, when: when, headline: headline, reminderRow: reminderRow,
     notificationBody: notificationBody, tooltip: tooltip, updateArgs: updateArgs
   }

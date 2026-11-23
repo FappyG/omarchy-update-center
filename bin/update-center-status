@@ -6,7 +6,8 @@
 #   update-center-status busy                                 is an update running right now?
 #
 # Each source reports {enabled, available, ok, error, packages[]}, where a
-# package is {name, from, to}. A source that fails keeps ok=false and its
+# package is {name, from, to}; a plugin with uncommitted changes also carries
+# localEdits: true. A source that fails keeps ok=false and its
 # error text; the panel keeps the previous result for it. Nothing here needs
 # root: checkupdates syncs into a temporary database, and yay -Qua, mise and
 # flatpak remote-ls only read.
@@ -171,7 +172,7 @@ check_flatpak() {
 # One plugin: fetch its upstream HEAD (as omarchy-plugin-update does) and print
 # a {name, from, to} line when it is behind, or "ERR <id>" when the fetch fails.
 check_one_plugin() {
-  local dir=$1 id behind version remote note=""
+  local dir=$1 id behind version remote note="" edited=false
   id=$(basename "$dir")
   # Normally "origin"; a checkout that was re-pointed may only have another remote.
   remote=origin
@@ -185,10 +186,15 @@ check_one_plugin() {
   ((behind > 0)) || return 0
   version=$(jq -r '.version // empty' "$dir/manifest.json" 2>/dev/null)
   # Local edits make omarchy-plugin-update refuse to fast-forward; say so.
-  [[ -n $(git -C "$dir" status --porcelain 2>/dev/null) ]] && note=", has local edits"
+  # Listed, but flagged so the panel leaves it out of the waiting count.
+  if [[ -n $(git -C "$dir" status --porcelain 2>/dev/null) ]]; then
+    note=", has local edits"
+    edited=true
+  fi
   jq -n -c --arg name "$id" --arg from "${version:-installed}" \
     --arg to "$behind new change$( ((behind == 1)) || echo s)$note" \
-    '{name: $name, from: $from, to: $to}'
+    --argjson edited "$edited" \
+    '{name: $name, from: $from, to: $to} + (if $edited then {localEdits: true} else {} end)'
 }
 
 check_plugins() {

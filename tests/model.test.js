@@ -160,3 +160,41 @@ describe("updateArgs", () => {
     expect(Model.updateArgs(status({ mise: source(pkg), plugins: source(pkg) }))).toEqual(["--system", "--plugins"])
   })
 })
+
+describe("shell plugins", () => {
+  const source = (packages) => ({ enabled: true, available: true, ok: true, error: "", packages })
+  const pkg = (name, extra = {}) => ({ name, from: "1", to: "2", ...extra })
+  const edited = (name) => pkg(name, { to: "1 new change, has local edits", localEdits: true })
+  const status = (sources) => ({
+    sources: { system: source([]), aur: source([]), mise: source([]), omarchy: source([]), plugins: source([]), ...sources },
+  })
+  // As the panel does it: plan on the reminder count, not the badge count.
+  const plan = (s) => Model.reminderPlan(NOW, NOW - 30 * DAY, null, Model.reminderCount(s), 7, 24)
+
+  test("waiting plugins count in the badge but never make you overdue", () => {
+    const s = status({ plugins: source([pkg("a.widget"), pkg("b.widget")]) })
+    expect(Model.pendingCount(s)).toBe(2)
+    expect(Model.reminderCount(s)).toBe(0)
+    expect(plan(s)).toMatchObject({ state: "current", notifyNow: false, nextReminderAt: null })
+  })
+
+  test("system updates waiting still remind, with plugins waiting too", () => {
+    const s = status({ system: source([pkg("linux")]), plugins: source([pkg("a.widget")]) })
+    expect(Model.pendingCount(s)).toBe(2)
+    expect(Model.reminderCount(s)).toBe(1)
+    expect(plan(s)).toMatchObject({ state: "overdue", notifyNow: true })
+  })
+
+  test("a plugin with local edits is listed but not counted", () => {
+    const s = status({ plugins: source([pkg("a.widget"), edited("b.widget")]) })
+    expect(Model.groups(s).find((g) => g.key === "plugins").packages).toHaveLength(2)
+    expect(Model.pendingCount(s)).toBe(1)
+  })
+
+  test("only edited plugins waiting: nothing counts and Update now has nothing to do", () => {
+    const s = status({ plugins: source([edited("b.widget")]) })
+    expect(Model.pendingCount(s)).toBe(0)
+    expect(Model.updateArgs(s)).toEqual([])
+    expect(Model.updateArgs(status({ system: source([pkg("linux")]), plugins: source([edited("b.widget")]) }))).toEqual(["--system"])
+  })
+})

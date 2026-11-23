@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "author": "Liam Beckingham",
   "license": "MIT",
-  "description": "Every pending update in one bar panel (system packages, AUR, mise, Flatpak, and Omarchy itself), with a gentle reminder once you haven't updated in a while.",
+  "description": "Every pending update in one bar panel (system packages, AUR, mise, Flatpak, shell plugins, and Omarchy itself), with a gentle reminder once you haven't updated in a while.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Update Center",
-    "description": "Pending system, AUR, mise, Flatpak, and Omarchy updates, when you last updated, and a reminder once you're overdue.",
+    "description": "Pending system, AUR, mise, Flatpak, plugin, and Omarchy updates, when you last updated, and a reminder once you're overdue.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right",
@@ -101,7 +101,7 @@
         "key": "checkPlugins",
         "type": "boolean",
         "label": "Check shell plugins",
-        "description": "Plugins installed from git (omarchy plugin add); updated with omarchy plugin update.",
+        "description": "Plugins installed from git (omarchy plugin add); updated with omarchy plugin update. Never triggers the reminder on its own.",
         "defaultValue": true
       },
       {

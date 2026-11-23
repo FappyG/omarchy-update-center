@@ -54,8 +54,10 @@ Panel {
 
   readonly property var groups: Model.groups(status)
   readonly property int pending: Model.pendingCount(status)
+  // Plugins count in the badge but never make the reminder fire.
+  readonly property int remindable: Model.reminderCount(status)
   readonly property var lastUpdate: status ? status.lastUpdate : null
-  readonly property var plan: Model.reminderPlan(now, lastUpdate, lastReminderAt, pending, reminderDays, reminderRepeatHours)
+  readonly property var plan: Model.reminderPlan(now, lastUpdate, lastReminderAt, remindable, reminderDays, reminderRepeatHours)
   readonly property bool overdue: plan.state === "overdue"
 
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
@@ -200,11 +202,14 @@ Panel {
     onTriggered: root.check()
   }
 
-  // Cheap, offline: is an update running? Fast while one is expected.
+  // Cheap, offline: is an update running? Fast while one is expected. Also
+  // asks right away on load: updating plugins (Update Center included)
+  // reloads this widget mid-update, and it should say "Updating…" at once.
   Timer {
     interval: root.awaitingUpdate || root.busy ? 3000 : 60000
     running: true
     repeat: true
+    triggeredOnStart: true
     onTriggered: if (!busyProc.running) busyProc.running = true
   }
 
