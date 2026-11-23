@@ -27,6 +27,7 @@
       "checkMise": true,
       "checkFlatpak": true,
       "checkOmarchy": true,
+      "checkPlugins": true,
       "showCount": true,
       "highlightOverdue": true
     },
@@ -94,6 +95,13 @@
         "type": "boolean",
         "label": "Show Omarchy separately",
         "description": "List a new Omarchy release as its own line. Needs system packages to be checked.",
+        "defaultValue": true
+      },
+      {
+        "key": "checkPlugins",
+        "type": "boolean",
+        "label": "Check shell plugins",
+        "description": "Plugins installed from git (omarchy plugin add); updated with omarchy plugin update.",
         "defaultValue": true
       },
       {
