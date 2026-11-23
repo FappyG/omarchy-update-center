@@ -78,6 +78,21 @@ describe("status handling", () => {
     expect(Model.hasErrors(merged)).toBe(true)
   })
 
+  test("a partial failure uses its fresh packages and keeps the error shown", () => {
+    // One plugin unreachable for good must not freeze the list: after a.widget
+    // was updated, it drops off even though gone.widget still fails.
+    const prev = { sources: { ...status.sources, plugins: source([pkg("a.widget"), pkg("b.widget")]) } }
+    const plugins = source([pkg("b.widget")], { ok: false, error: "Couldn't reach: gone.widget", partial: true })
+    const merged = Model.mergeStatus(prev, { sources: { ...status.sources, plugins } })
+    expect(merged.sources.plugins.packages.map((p) => p.name)).toEqual(["b.widget"])
+    expect(merged.sources.plugins).toMatchObject({ ok: false, error: "Couldn't reach: gone.widget" })
+    expect(merged.sources.plugins.stale).toBeUndefined()
+    expect(Model.hasErrors(merged)).toBe(true)
+    // The error alone never reminds: plugins are out of the reminder count.
+    expect(Model.reminderCount(merged)).toBe(3)
+    expect(Model.pendingCount(merged)).toBe(4)
+  })
+
   test("parseStatus rejects junk", () => {
     expect(Model.parseStatus("not json")).toBeNull()
     expect(Model.parseStatus("{}")).toBeNull()
@@ -88,6 +103,10 @@ describe("status handling", () => {
     expect(Model.skipList({ checkAur: false, checkMise: false, checkSystem: true })).toBe("aur,mise")
     expect(Model.skipList({ checkFlatpak: false })).toBe("flatpak")
     expect(Model.skipList({})).toBe("")
+  })
+
+  test("skipList includes plugins when turned off", () => {
+    expect(Model.skipList({ checkPlugins: false })).toBe("plugins")
   })
 })
 
@@ -131,5 +150,102 @@ describe("reminderRow", () => {
   })
   test("unknown last update", () => {
     expect(row(null, 2).value).toBe("off, last update unknown")
+  })
+})
+
+describe("updateArgs", () => {
+  const source = (packages) => ({ enabled: true, available: true, ok: true, error: "", packages })
+  const pkg = [{ name: "x", from: "1", to: "2" }]
+  const status = (sources) => ({
+    sources: { system: source([]), aur: source([]), mise: source([]), omarchy: source([]), plugins: source([]), ...sources },
+  })
+
+  test("nothing waiting asks for nothing", () => {
+    expect(Model.updateArgs(status({}))).toEqual([])
+  })
+  test("only plugins waiting skips the system update", () => {
+    expect(Model.updateArgs(status({ plugins: source(pkg) }))).toEqual(["--plugins"])
+  })
+  test("any non-plugin source means a system update", () => {
+    for (const key of ["system", "aur", "mise", "omarchy"]) {
+      expect(Model.updateArgs(status({ [key]: source(pkg) }))).toEqual(["--system"])
+    }
+  })
+  test("both waiting asks for both", () => {
+    expect(Model.updateArgs(status({ mise: source(pkg), plugins: source(pkg) }))).toEqual(["--system", "--plugins"])
+  })
+})
+
+describe("shell plugins", () => {
+  const source = (packages) => ({ enabled: true, available: true, ok: true, error: "", packages })
+  const pkg = (name, extra = {}) => ({ name, from: "1", to: "2", ...extra })
+  const edited = (name) => pkg(name, { to: "1 new change, has local edits", localEdits: true })
+  const status = (sources) => ({
+    sources: { system: source([]), aur: source([]), mise: source([]), omarchy: source([]), plugins: source([]), ...sources },
+  })
+  // As the panel does it: plan on the reminder count, not the badge count.
+  const plan = (s) => Model.reminderPlan(NOW, NOW - 30 * DAY, null, Model.reminderCount(s), 7, 24)
+
+  test("waiting plugins count in the badge but never make you overdue", () => {
+    const s = status({ plugins: source([pkg("a.widget"), pkg("b.widget")]) })
+    expect(Model.pendingCount(s)).toBe(2)
+    expect(Model.reminderCount(s)).toBe(0)
+    expect(plan(s)).toMatchObject({ state: "current", notifyNow: false, nextReminderAt: null })
+  })
+
+  test("system updates waiting still remind, with plugins waiting too", () => {
+    const s = status({ system: source([pkg("linux")]), plugins: source([pkg("a.widget")]) })
+    expect(Model.pendingCount(s)).toBe(2)
+    expect(Model.reminderCount(s)).toBe(1)
+    expect(plan(s)).toMatchObject({ state: "overdue", notifyNow: true })
+  })
+
+  test("a plugin with local edits is listed but not counted", () => {
+    const s = status({ plugins: source([pkg("a.widget"), edited("b.widget")]) })
+    expect(Model.groups(s).find((g) => g.key === "plugins").packages).toHaveLength(2)
+    expect(Model.pendingCount(s)).toBe(1)
+  })
+
+  test("a plugin with commits of its own is listed but not counted, nor updated", () => {
+    const diverged = pkg("c.widget", { to: "1 new change, has local commits", localCommits: true })
+    const s = status({ plugins: source([pkg("a.widget"), diverged]) })
+    expect(Model.groups(s).find((g) => g.key === "plugins").packages).toHaveLength(2)
+    expect(Model.pendingCount(s)).toBe(1)
+    expect(Model.updateArgs(status({ plugins: source([diverged]) }))).toEqual([])
+  })
+
+  test("the Plugins group's own number matches the badge", () => {
+    const diverged = pkg("c.widget", { localCommits: true })
+    const s = status({ plugins: source([pkg("a.widget"), edited("b.widget"), diverged]) })
+    const group = Model.groups(s).find((g) => g.key === "plugins")
+    expect(group.packages).toHaveLength(3)
+    expect(group.count).toBe(1)
+    expect(Model.groupSummary(group)).toBe("1")
+    expect(Model.pendingCount(s)).toBe(1)
+    const none = Model.groups(status({ plugins: source([edited("b.widget")]) })).find((g) => g.key === "plugins")
+    expect(Model.groupSummary(none)).toBe("0")
+    const failed = { ...group, ok: false }
+    expect(Model.groupSummary(failed)).toBe("1 · couldn't check")
+    expect(Model.groupSummary({ ...group, packages: [], count: 0 })).toBe("up to date")
+    expect(Model.groupSummary({ ...group, packages: [], count: 0, ok: false })).toBe("couldn't check")
+  })
+
+  test("only edited plugins waiting: nothing counts and Update now has nothing to do", () => {
+    const s = status({ plugins: source([edited("b.widget")]) })
+    expect(Model.pendingCount(s)).toBe(0)
+    expect(Model.updateArgs(s)).toEqual([])
+    expect(Model.updateArgs(status({ system: source([pkg("linux")]), plugins: source([edited("b.widget")]) }))).toEqual(["--system"])
+  })
+})
+
+describe("shellQuote", () => {
+  test("survives one shell per quoting, spaces and quotes included", () => {
+    const path = "/home/a b/it's/bin/update-all"
+    const once = Bun.spawnSync(["bash", "-c", "printf %s " + Model.shellQuote(path)]).stdout.toString()
+    expect(once).toBe(path)
+    const twice = Model.shellQuote(Model.shellQuote(path))
+    const inner = Bun.spawnSync(["bash", "-c", "printf %s " + twice]).stdout.toString()
+    const outer = Bun.spawnSync(["bash", "-c", "printf %s " + inner]).stdout.toString()
+    expect(outer).toBe(path)
   })
 })

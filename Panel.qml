@@ -21,7 +21,13 @@ Panel {
   readonly property string pluginDir: decodeURIComponent(String(Qt.resolvedUrl(".")).replace(/^file:\/\//, ""))
   readonly property string statusScript: pluginDir + "bin/update-center-status"
   readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/liambeck99.update-center"
-  readonly property string updateCommand: "omarchy-launch-floating-terminal-with-presentation omarchy-update"
+  readonly property string updateScript: pluginDir + "bin/update-all"
+  // With nothing pending (no reminder fires then) fall back to a plain system update.
+  readonly property var updateArgs: {
+    var a = Model.updateArgs(status)
+    return a.length > 0 ? a : ["--system"]
+  }
+  readonly property string updateCommand: "omarchy-launch-floating-terminal-with-presentation " + Model.shellQuote(Model.shellQuote(updateScript)) + " " + updateArgs.join(" ")
 
   readonly property int reminderDays: Math.max(1, setting("reminderDays", 7))
   readonly property int checkIntervalHours: Math.max(1, setting("checkIntervalHours", 6))
@@ -48,8 +54,10 @@ Panel {
 
   readonly property var groups: Model.groups(status)
   readonly property int pending: Model.pendingCount(status)
+  // Plugins count in the badge but never make the reminder fire.
+  readonly property int remindable: Model.reminderCount(status)
   readonly property var lastUpdate: status ? status.lastUpdate : null
-  readonly property var plan: Model.reminderPlan(now, lastUpdate, lastReminderAt, pending, reminderDays, reminderRepeatHours)
+  readonly property var plan: Model.reminderPlan(now, lastUpdate, lastReminderAt, remindable, reminderDays, reminderRepeatHours)
   readonly property bool overdue: plan.state === "overdue"
 
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
@@ -91,8 +99,8 @@ Panel {
       "omarchy-notification-send", "-g", "", "-u", "normal",
       "Time to update",
       Model.notificationBody(root.now, root.lastUpdate, root.pending),
-      "--exec", "omarchy-launch-floating-terminal-with-presentation", "omarchy-update"
-    ])
+      "--exec", "omarchy-launch-floating-terminal-with-presentation", Model.shellQuote(root.updateScript)
+    ].concat(root.updateArgs))
     rememberReminder(Math.floor(root.now))
   }
 
@@ -194,11 +202,14 @@ Panel {
     onTriggered: root.check()
   }
 
-  // Cheap, offline: is an update running? Fast while one is expected.
+  // Cheap, offline: is an update running? Fast while one is expected. Also
+  // asks right away on load: updating plugins (Update Center included)
+  // reloads this widget mid-update, and it should say "Updating…" at once.
   Timer {
     interval: root.awaitingUpdate || root.busy ? 3000 : 60000
     running: true
     repeat: true
+    triggeredOnStart: true
     onTriggered: if (!busyProc.running) busyProc.running = true
   }
 
@@ -450,11 +461,7 @@ Panel {
                     horizontalAlignment: Text.AlignRight
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
-                    text: {
-                      var g = group.modelData
-                      if (!g.ok) return (g.packages.length > 0 ? g.packages.length + " · " : "") + "couldn't check"
-                      return g.packages.length > 0 ? String(g.packages.length) : "up to date"
-                    }
+                    text: Model.groupSummary(group.modelData)
                     color: !group.modelData.ok ? root.urgent : (group.canExpand ? root.foreground : root.muted)
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.bodySmall
@@ -556,7 +563,7 @@ Panel {
             anchors.verticalCenter: parent.verticalCenter
             iconText: ""
             text: root.busy ? "Updating…" : "Update now"
-            tooltipText: root.busy ? "An update is already running" : "Run omarchy-update"
+            tooltipText: root.busy ? "An update is already running" : "Update everything listed"
             fontSize: Style.font.bodySmall
             foreground: root.foreground
             fontFamily: root.fontFamily

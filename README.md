@@ -1,6 +1,6 @@
 # Update Center
 
-An [Omarchy](https://omarchy.org) bar widget that keeps track of **how long it's been since you last updated** and reminds you once you're overdue. It shows every pending update in one place: system packages, AUR, mise tools, Flatpak apps, and Omarchy itself.
+An [Omarchy](https://omarchy.org) bar widget that keeps track of **how long it's been since you last updated** and reminds you once you're overdue. It shows every pending update in one place: system packages, AUR, mise tools, Flatpak apps, shell plugins, and Omarchy itself.
 
 Most update indicators alert you whenever something new appears. Update Center stays quiet until your last full upgrade is older than a week (adjustable) *and* updates are actually waiting, then reminds you once a day until you update. Updating still goes through `omarchy-update`.
 
@@ -15,14 +15,14 @@ Most update indicators alert you whenever something new appears. Update Center s
   - pending updates per source, which you can expand to see each package's old → new version
   - when it last checked, and an **Update now** button that opens the same floating `omarchy-update` terminal as the Omarchy menu
 - **Right-click:** check now.
-- **Reminder:** a notification once your last full upgrade is older than 7 days *and* updates are waiting. It repeats daily until you update, and clicking it starts the update. Nothing is waiting? No reminder.
+- **Reminder:** a notification once your last full upgrade is older than 7 days *and* updates are waiting. It repeats daily until you update, and clicking it starts the update. Nothing is waiting? No reminder. Shell plugins show in the panel and the count, but never trigger a reminder on their own.
 
 ## Requirements
 
 - **Omarchy** with the Quickshell shell (Omarchy 4 / Quattro). The plugin uses `omarchy-update`, `omarchy-notification-send` and `omarchy-launch-floating-terminal-with-presentation`.
 - **`pacman-contrib`** for `checkupdates`, which checks system packages. Omarchy installs it by default.
 - **`jq`** and **`util-linux`** (`flock`), both installed on Omarchy by default.
-- Optional: **`yay`** to check AUR packages, **`mise`** to check mise tools, and **`flatpak`** to check Flatpak apps. If any of them is missing, its group is hidden.
+- Optional: **`yay`** to check AUR packages, **`mise`** to check mise tools, **`flatpak`** to check Flatpak apps, and **`git`** to check shell plugins. If any of them is missing, its group is hidden.
 
 It needs no root, installs no hooks or services, and never changes your configuration. The only file it writes is `~/.local/state/liambeck99.update-center/state.json`, which records when you were last reminded.
 
@@ -78,6 +78,7 @@ They're stored on the widget's entry in `~/.config/omarchy/shell.json`, which yo
 | `checkMise` | true | Check mise tools (`mise outdated`) |
 | `checkFlatpak` | true | Check Flatpak apps and runtimes (`flatpak remote-ls --updates`) |
 | `checkOmarchy` | true | Show a new Omarchy release as its own line |
+| `checkPlugins` | true | Check shell plugins installed from git (`omarchy plugin add`) |
 | `showCount` | true | Show the number of waiting updates next to the bar icon (off keeps the icon a fixed width) |
 | `highlightOverdue` | true | Colour the bar icon with the theme's urgent colour when overdue (off keeps the bar's normal colour; the panel still says you're overdue) |
 
@@ -89,10 +90,13 @@ Everything is read-only and needs no root:
 - **AUR:** `yay -Qua`.
 - **mise:** `mise outdated`, with the same release-age override `omarchy-update` uses, so counts match what an update would install. Lazy tools that were never installed aren't counted, because `mise up` skips them; they download the first time you run them.
 - **Flatpak:** `flatpak remote-ls --updates`, across system and user installations. Runtimes rebuilt without a version change show as "new build". `omarchy-update` doesn't update Flatpak apps; run `flatpak update`, or add a `post-update` hook that does.
+- **Plugins:** `git fetch origin HEAD` in each git-managed plugin, as `omarchy plugin update` does. Fetching only updates the plugin's git metadata, not its files. Only what **Update now** can clear is counted: `omarchy plugin update` only fast-forwards a clean checkout, so a plugin with uncommitted changes to its files ("has local edits") or commits of its own ("has local commits") is listed with that note, but isn't counted as waiting, in the badge or in the Plugins row. Untracked files, such as a `__pycache__` folder, don't count as edits. If some plugins can't be reached, the others still show fresh results, with the unreachable ones named in the error.
 - **Last updated:** the most recent `starting full system upgrade` line in `/var/log/pacman.log`. It counts upgrades from `omarchy-update` and from a hand-run `pacman -Syu`.
-- **Update running:** once a minute it checks Omarchy's update lock and pacman's `db.lck`, and checks again when an update finishes.
+- **Update running:** when the widget loads and once a minute after that it checks Omarchy's update lock and pacman's `db.lck`, and checks again when an update finishes.
 
 Checks run 45 seconds after login, every `checkIntervalHours`, when you open the panel (at most every two minutes), and after updates. The time of the last reminder is kept in `~/.local/state/liambeck99.update-center/state.json`, so restarting the shell doesn't repeat a reminder.
+
+**Update now** and the reminder run `bin/update-all`, which only updates the kinds of update that are waiting. It holds Omarchy's update lock for the whole run, runs `omarchy-plugin-update` first (it shows each plugin's changes and asks before applying them), then `omarchy-update`.
 
 A source that fails to check (for example, while you're offline) shows its error, keeps its previous results, and never triggers a reminder on its own.
 
