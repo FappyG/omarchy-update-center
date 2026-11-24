@@ -19,6 +19,17 @@ describe("Panel wiring", () => {
     expect(qml).toMatch(/property int remindable: Model\.reminderCount\(status\)/)
   })
 
+  test("a package name with a url opens it and closes the panel; without one it is plain text", () => {
+    const name = qml.match(/id: pkgName[\s\S]*?\n {18}\}\n/)
+    expect(name).not.toBeNull()
+    expect(name[0]).toMatch(/text: modelData\.name\n/)
+    expect(name[0]).toMatch(/link: typeof modelData\.url === "string" \? modelData\.url : ""/)
+    expect(name[0]).toMatch(/enabled: pkgName\.link !== ""/)
+    expect(name[0]).toMatch(/cursorShape: enabled \? Qt\.PointingHandCursor/)
+    expect(name[0]).toMatch(/font\.underline: pkgLink\.containsMouse/)
+    expect(name[0]).toMatch(/execDetached\(\["xdg-open", pkgName\.link\]\)\s*root\.close\(\)/)
+  })
+
   test("group rows show the model's count, not every listed package", () => {
     expect(qml).toMatch(/text: Model\.groupSummary\(group\.modelData\)/)
     expect(qml).not.toMatch(/String\(g\.packages\.length\)/)
