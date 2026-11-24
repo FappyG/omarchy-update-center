@@ -3,10 +3,13 @@
 # Run every kind of update Update Center lists, under the Omarchy update lock
 # so the bar shows "Updating…" for the whole run.
 #
-#   update-all [--plugins] [--system]
+#   update-all [--plugins] [--flatpak] [--system]
 #
 # --plugins: omarchy-plugin-update, which shows each plugin's changes and asks
 #            before applying them. Runs first: it is quick and never reboots.
+# --flatpak: flatpak update (apps and runtimes, every installation), which lists
+#            the changes and asks before applying them. omarchy-update doesn't
+#            cover Flatpak, and may end in a reboot, so this runs before it.
 # --system:  omarchy-update (packages, AUR, mise, Omarchy). It sees the lock
 #            is already held and carries on.
 
@@ -14,10 +17,11 @@ if ! omarchy-update-lock held; then
   exec omarchy-update-lock run "$0" "$@"
 fi
 
-plugins=false system=false
+plugins=false flatpak=false system=false
 for arg; do
   case $arg in
     --plugins) plugins=true ;;
+    --flatpak) flatpak=true ;;
     --system) system=true ;;
   esac
 done
@@ -26,6 +30,13 @@ if $plugins; then
   echo "Updating shell plugins…"
   echo
   omarchy-plugin-update || echo "Some plugins were not updated (see above)."
+  echo
+fi
+
+if $flatpak; then
+  echo "Updating Flatpak apps…"
+  echo
+  flatpak update || echo "Flatpak apps were not updated (see above)."
   echo
 fi
 

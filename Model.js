@@ -224,17 +224,21 @@ function shellQuote(s) {
   return "'" + String(s).replace(/'/g, "'\\''") + "'"
 }
 
+// What bin/update-all should run for what's waiting. Plugins and Flatpak have
+// their own steps; everything else is covered by omarchy-update (--system).
 function updateArgs(status) {
   var rows = groups(status)
-  var system = false, plugins = false
+  var system = false, plugins = false, flatpak = false
   for (var i = 0; i < rows.length; i++) {
     if (rows[i].count === 0) continue
     if (rows[i].key === "plugins") plugins = true
+    else if (rows[i].key === "flatpak") flatpak = true
     else system = true
   }
   var args = []
   if (system) args.push("--system")
   if (plugins) args.push("--plugins")
+  if (flatpak) args.push("--flatpak")
   return args
 }
 

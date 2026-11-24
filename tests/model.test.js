@@ -157,7 +157,7 @@ describe("updateArgs", () => {
   const source = (packages) => ({ enabled: true, available: true, ok: true, error: "", packages })
   const pkg = [{ name: "x", from: "1", to: "2" }]
   const status = (sources) => ({
-    sources: { system: source([]), aur: source([]), mise: source([]), omarchy: source([]), plugins: source([]), ...sources },
+    sources: { system: source([]), aur: source([]), mise: source([]), flatpak: source([]), omarchy: source([]), plugins: source([]), ...sources },
   })
 
   test("nothing waiting asks for nothing", () => {
@@ -173,6 +173,12 @@ describe("updateArgs", () => {
   })
   test("both waiting asks for both", () => {
     expect(Model.updateArgs(status({ mise: source(pkg), plugins: source(pkg) }))).toEqual(["--system", "--plugins"])
+  })
+  test("only Flatpak waiting updates Flatpak, not the system", () => {
+    expect(Model.updateArgs(status({ flatpak: source(pkg) }))).toEqual(["--flatpak"])
+  })
+  test("Flatpak waiting alongside the rest asks for each", () => {
+    expect(Model.updateArgs(status({ aur: source(pkg), flatpak: source(pkg), plugins: source(pkg) }))).toEqual(["--system", "--plugins", "--flatpak"])
   })
 })
 

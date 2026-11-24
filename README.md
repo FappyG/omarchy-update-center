@@ -89,14 +89,14 @@ Everything is read-only and needs no root:
 - **System:** `checkupdates`, which syncs into a temporary database and never touches your real one.
 - **AUR:** `yay -Qua`.
 - **mise:** `mise outdated`, with the same release-age override `omarchy-update` uses, so counts match what an update would install. Lazy tools that were never installed aren't counted, because `mise up` skips them; they download the first time you run them.
-- **Flatpak:** `flatpak remote-ls --updates`, across system and user installations. Runtimes rebuilt without a version change show as "new build". `omarchy-update` doesn't update Flatpak apps; run `flatpak update`, or add a `post-update` hook that does.
+- **Flatpak:** `flatpak remote-ls --updates`, across system and user installations. Runtimes rebuilt without a version change show as "new build". `omarchy-update` doesn't update Flatpak apps, so **Update now** runs `flatpak update` itself.
 - **Plugins:** `git fetch origin HEAD` in each git-managed plugin, as `omarchy plugin update` does. Fetching only updates the plugin's git metadata, not its files. Only what **Update now** can clear is counted: `omarchy plugin update` only fast-forwards a clean checkout, so a plugin with uncommitted changes to its files ("has local edits") or commits of its own ("has local commits") is listed with that note, but isn't counted as waiting, in the badge or in the Plugins row. Untracked files, such as a `__pycache__` folder, don't count as edits. If some plugins can't be reached, the others still show fresh results, with the unreachable ones named in the error.
 - **Last updated:** the most recent `starting full system upgrade` line in `/var/log/pacman.log`. It counts upgrades from `omarchy-update` and from a hand-run `pacman -Syu`.
 - **Update running:** when the widget loads and once a minute after that it checks Omarchy's update lock and pacman's `db.lck`, and checks again when an update finishes.
 
 Checks run 45 seconds after login, every `checkIntervalHours`, when you open the panel (at most every two minutes), and after updates. The time of the last reminder is kept in `~/.local/state/liambeck99.update-center/state.json`, so restarting the shell doesn't repeat a reminder.
 
-**Update now** and the reminder run `bin/update-all`, which only updates the kinds of update that are waiting. It holds Omarchy's update lock for the whole run, runs `omarchy-plugin-update` first (it shows each plugin's changes and asks before applying them), then `omarchy-update`.
+**Update now** and the reminder run `bin/update-all`, which only updates the kinds of update that are waiting. It holds Omarchy's update lock for the whole run, runs `omarchy-plugin-update` first (it shows each plugin's changes and asks before applying them), then `flatpak update` (it lists the changes and asks too), then `omarchy-update`. When only plugins or Flatpak apps are waiting, it doesn't start a system upgrade.
 
 A source that fails to check (for example, while you're offline) shows its error, keeps its previous results, and never triggers a reminder on its own.
 
