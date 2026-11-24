@@ -62,11 +62,12 @@ function groups(status) {
   return rows
 }
 
-// Whether "Update now" can apply a listed update. A plugin with local edits
-// or commits of its own is listed with a note, but omarchy-plugin-update only
-// fast-forwards a clean checkout, so it never counts as waiting.
+// Whether "Update now" can apply a listed update. A plugin with local edits,
+// commits of its own or no origin remote is listed with a note, but
+// omarchy-plugin-update only fast-forwards a clean checkout from origin, so it
+// never counts as waiting.
 function updatable(pkg) {
-  return !(pkg && (pkg.localEdits === true || pkg.localCommits === true))
+  return !(pkg && (pkg.localEdits === true || pkg.localCommits === true || pkg.noOrigin === true))
 }
 
 function countUpdatable(packages) {

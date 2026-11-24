@@ -260,6 +260,37 @@ describe("update-center-status", () => {
       expect(pkg.localEdits).toBeUndefined()
     })
 
+    test("a plugin without an origin remote is checked against its other remote, but flagged", () => {
+      // omarchy plugin update only fetches origin, so Update now can't apply it.
+      const root = pluginsRoot()
+      const p = plugin(root, "renamed")
+      commit(p.upstream, "a", "1")
+      git(p.checkout, "remote", "rename", "origin", "upstream")
+      const pkg = check(root).packages[0]
+      expect(pkg).toMatchObject({ name: "renamed", to: "1 new change, no origin remote", noOrigin: true })
+      expect(pkg.localEdits).toBeUndefined()
+      expect(pkg.localCommits).toBeUndefined()
+    })
+
+    test("a missing origin remote is noted alongside local edits", () => {
+      const root = pluginsRoot()
+      const p = plugin(root, "renamed")
+      commit(p.upstream, "a", "1")
+      git(p.checkout, "remote", "rename", "origin", "upstream")
+      writeFileSync(join(p.checkout, "manifest.json"), '{"version":"1.2.3","local":true}')
+      expect(check(root).packages[0]).toMatchObject({
+        to: "1 new change, has local edits, no origin remote", localEdits: true, noOrigin: true,
+      })
+    })
+
+    test("a plugin with no remotes has nothing to check and is not an error", () => {
+      const root = pluginsRoot()
+      const p = plugin(root, "local")
+      git(p.checkout, "remote", "remove", "origin")
+      const source = check(root)
+      expect(source).toMatchObject({ ok: true, error: "", packages: [] })
+    })
+
     test("an untracked file alone is not a local edit", () => {
       const root = pluginsRoot()
       const p = plugin(root, "cached")
