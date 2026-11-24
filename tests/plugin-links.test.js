@@ -63,7 +63,7 @@ exec "${realGit}" "$@"
   chmodSync(wrapper, 0o755)
 })
 
-function run(skip = "system,aur,mise,omarchy", env = {}, path = `${binDir}:${process.env.PATH}`) {
+function run(skip = "system,aur,mise,flatpak,omarchy", env = {}, path = `${binDir}:${process.env.PATH}`) {
   const proc = Bun.spawnSync([script, "--skip", skip], {
     env: {
       ...env,
@@ -120,7 +120,7 @@ describe("plugin change links", () => {
     for (const tool of ["checkupdates", "yay", "mise", "pacman"]) {
       try { symlinkSync(join(import.meta.dir, "stubs", tool), join(stubBin, tool)) } catch {}
     }
-    const json = run("plugins,omarchy", {
+    const json = run("plugins,flatpak,omarchy", {
       STUB_CHECKUPDATES_EXIT: "0",
       STUB_CHECKUPDATES_OUT: "librewolf 158.0.1_1-1 -> 159.0_1-1\\n",
       STUB_YAY_EXIT: "0",
