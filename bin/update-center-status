@@ -227,12 +227,19 @@ plugin_changes_url() {
 # FETCH_HEAD after showing the diff, so a check running while its prompt is open
 # must not change what gets merged.
 check_one_plugin() {
-  local dir=$1 id behind version remote url note="" edited=false diverged=false
+  local dir=$1 id behind version remote url note="" edited=false diverged=false no_origin=false
   id=$(basename "$dir")
-  # Normally "origin"; a checkout that was re-pointed may only have another remote.
+  # Normally "origin". A checkout that was re-pointed may only have another
+  # remote: it's still checked against that one, but omarchy-plugin-update only
+  # fetches origin, so it's flagged below. With no remote at all (a plugin
+  # being written locally) there is nothing to check.
   remote=origin
-  git -C "$dir" remote get-url origin >/dev/null 2>&1 || remote=$(git -C "$dir" remote | head -n1)
-  if [[ -z $remote ]] || ! GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -oBatchMode=yes" \
+  if ! git -C "$dir" remote get-url origin >/dev/null 2>&1; then
+    remote=$(git -C "$dir" remote | head -n1)
+    [[ -n $remote ]] || return 0
+    no_origin=true
+  fi
+  if ! GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -oBatchMode=yes" \
     timeout "$CHECK_TIMEOUT" git -C "$dir" fetch --quiet --no-write-fetch-head "$remote" "+HEAD:refs/update-center/upstream" 2>/dev/null; then
     echo "ERR $id"
     return
@@ -240,11 +247,11 @@ check_one_plugin() {
   behind=$(git -C "$dir" rev-list --count HEAD..refs/update-center/upstream 2>/dev/null) || behind=0
   ((behind > 0)) || return 0
   version=$(jq -r '.version // empty' "$dir/manifest.json" 2>/dev/null)
-  # omarchy-plugin-update only fast-forwards. A plugin with commits of its own
-  # (HEAD not an ancestor of upstream) or uncommitted changes to tracked files
-  # can't be updated by it; untracked files (a __pycache__) don't get in the
-  # way. Such a plugin is listed with a note, but flagged so the panel leaves
-  # it out of the waiting count.
+  # omarchy-plugin-update only fast-forwards from origin. A plugin with commits
+  # of its own (HEAD not an ancestor of upstream), uncommitted changes to
+  # tracked files, or no origin remote can't be updated by it; untracked files
+  # (a __pycache__) don't get in the way. Such a plugin is listed with a note,
+  # but flagged so the panel leaves it out of the waiting count.
   git -C "$dir" merge-base --is-ancestor HEAD refs/update-center/upstream 2>/dev/null || diverged=true
   [[ -n $(git -C "$dir" status --porcelain --untracked-files=no 2>/dev/null) ]] && edited=true
   if $diverged && $edited; then
@@ -254,14 +261,16 @@ check_one_plugin() {
   elif $edited; then
     note=", has local edits"
   fi
+  $no_origin && note+=", no origin remote"
   url=$(plugin_changes_url "$dir" "$remote")
   jq -n -c --arg name "$id" --arg from "${version:-installed}" \
     --arg to "$behind new change$( ((behind == 1)) || echo s)$note" --arg url "$url" \
-    --argjson edited "$edited" --argjson diverged "$diverged" \
+    --argjson edited "$edited" --argjson diverged "$diverged" --argjson noOrigin "$no_origin" \
     '{name: $name, from: $from, to: $to}
      + (if $url != "" then {url: $url} else {} end)
      + (if $edited then {localEdits: true} else {} end)
-     + (if $diverged then {localCommits: true} else {} end)'
+     + (if $diverged then {localCommits: true} else {} end)
+     + (if $noOrigin then {noOrigin: true} else {} end)'
 }
 
 check_plugins() {

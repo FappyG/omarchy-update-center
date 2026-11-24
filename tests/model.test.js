@@ -220,6 +220,14 @@ describe("shell plugins", () => {
     expect(Model.updateArgs(status({ plugins: source([diverged]) }))).toEqual([])
   })
 
+  test("a plugin without an origin remote is listed but not counted, nor updated", () => {
+    const noOrigin = pkg("d.widget", { to: "1 new change, no origin remote", noOrigin: true })
+    const s = status({ plugins: source([pkg("a.widget"), noOrigin]) })
+    expect(Model.groups(s).find((g) => g.key === "plugins").packages).toHaveLength(2)
+    expect(Model.pendingCount(s)).toBe(1)
+    expect(Model.updateArgs(status({ plugins: source([noOrigin]) }))).toEqual([])
+  })
+
   test("the Plugins group's own number matches the badge", () => {
     const diverged = pkg("c.widget", { localCommits: true })
     const s = status({ plugins: source([pkg("a.widget"), edited("b.widget"), diverged]) })
