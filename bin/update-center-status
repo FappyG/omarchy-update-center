@@ -174,12 +174,19 @@ check_flatpak() {
   rm -f "$err"
 }
 
-# A git remote URL as a page a browser can open: https only, no ".git", no
-# user or token. Prints nothing for local paths or anything not recognised.
+# A git remote URL as a page a browser can open: no ".git", no user or token.
+# An http(s) remote is served from the same web server, so it keeps its scheme
+# and port; anything else (ssh://, git://, scp-like) opens over https on the
+# default port, as the port there is the ssh or git daemon's. Prints nothing
+# for local paths or anything not recognised.
 browse_url() {
-  local url=$1 host path
+  local url=$1 scheme=https web=false host path
   case $url in
     https://* | http://* | ssh://* | git://*)
+      if [[ $url == http://* || $url == https://* ]]; then
+        scheme=${url%%://*}
+        web=true
+      fi
       url=${url#*://}
       host=${url%%/*}
       path=${url#*/}
@@ -193,12 +200,12 @@ browse_url() {
     *) return 0 ;;
   esac
   host=${host##*@}
-  host=${host%%:*}
+  $web || host=${host%%:*}
   path=${path%/}
   path=${path%.git}
   path=${path#/}
   [[ -n $host && -n $path && $host != *[[:space:]]* && $path != *[[:space:]]* ]] || return 0
-  printf 'https://%s/%s\n' "$host" "$path"
+  printf '%s://%s/%s\n' "$scheme" "$host" "$path"
 }
 
 # Where to see what changed: on GitHub, a compare page from the last commit we

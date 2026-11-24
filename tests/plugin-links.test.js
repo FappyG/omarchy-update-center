@@ -22,7 +22,7 @@ function git(cwd, ...args) {
 
 function plugin(id, remoteUrl) {
   const d = join(plugins, id)
-  Bun.spawnSync([realGit, "clone", "--quiet", upstream, d])
+  git(plugins, "clone", "--quiet", upstream, d)
   git(d, "reset", "--quiet", "--hard", "HEAD~1")
   git(d, "remote", "set-url", "origin", remoteUrl)
   return d
@@ -45,6 +45,10 @@ beforeAll(() => {
   plugin("b.github-https", "https://user:secret@github.com/owner/plugin-b.git")
   plugin("c.codeberg", "https://codeberg.org/owner/plugin-c.git")
   plugin("d.local", "/srv/plugins/d")
+  // A port is the ssh daemon's on ssh:// but the web server's on http(s).
+  plugin("f.github-ssh-port", "ssh://git@github.com:22/owner/plugin-f.git/")
+  plugin("g.http-port", "http://10.0.0.5:3000/owner/plugin-g.git")
+  plugin("h.https-port", "https://git.example.com:8443/owner/plugin-h.git")
   // A plugin with a commit of its own on top of the last shared one.
   const forked = plugin("e.github-forked", "git@github.com:owner/plugin-e.git")
   writeFileSync(join(forked, "mine.txt"), "local\n")
@@ -97,6 +101,18 @@ describe("plugin change links", () => {
     expect(byName["c.codeberg"].url).toBe("https://codeberg.org/owner/plugin-c")
     // No web page, no link: the field is left out, as for other sources.
     expect(byName["d.local"]).not.toHaveProperty("url")
+  })
+
+  test("a port is dropped for ssh remotes but kept, with the scheme, for http(s) ones", () => {
+    const json = run()
+    const byName = Object.fromEntries(json.sources.plugins.packages.map(p => [p.name, p]))
+    const base = git(join(plugins, "a.github-ssh"), "rev-parse", "HEAD")
+    const head = git(upstream, "rev-parse", "HEAD")
+
+    // ssh:// with a port and a trailing slash after ".git" is still GitHub.
+    expect(byName["f.github-ssh-port"].url).toBe(`https://github.com/owner/plugin-f/compare/${base}...${head}`)
+    expect(byName["g.http-port"].url).toBe("http://10.0.0.5:3000/owner/plugin-g")
+    expect(byName["h.https-port"].url).toBe("https://git.example.com:8443/owner/plugin-h")
   })
 
   test("a plugin with commits of its own links to upstream's new commits since the last shared one", () => {
