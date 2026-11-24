@@ -21,11 +21,12 @@ case $1 in
 esac`)
   stub("omarchy-plugin-update", 'echo PLUGINS; exit "${STUB_PLUGINS_EXIT:-0}"')
   stub("omarchy-update", 'echo SYSTEM; exit "${STUB_SYSTEM_EXIT:-0}"')
+  stub("flatpak", '[[ $1 == update ]] && echo FLATPAK; exit "${STUB_FLATPAK_EXIT:-0}"')
 })
 
 function run(args, env = {}) {
   const proc = Bun.spawnSync([script, ...args], { env: { PATH: `${binDir}:${process.env.PATH}`, ...env } })
-  const steps = proc.stdout.toString().split("\n").filter(line => /^(LOCK|PLUGINS|SYSTEM)$/.test(line))
+  const steps = proc.stdout.toString().split("\n").filter(line => /^(LOCK|PLUGINS|FLATPAK|SYSTEM)$/.test(line))
   return { status: proc.exitCode, steps, stdout: proc.stdout.toString() }
 }
 
@@ -44,6 +45,17 @@ describe("update-all", () => {
     const { steps, stdout } = run(["--plugins", "--system"], { STUB_PLUGINS_EXIT: "1" })
     expect(steps).toEqual(["LOCK", "PLUGINS", "SYSTEM"])
     expect(stdout).toContain("Some plugins were not updated")
+  })
+  test("updates Flatpak after plugins and before the system, which may end in a reboot", () => {
+    expect(run(["--system", "--flatpak", "--plugins"]).steps).toEqual(["LOCK", "PLUGINS", "FLATPAK", "SYSTEM"])
+  })
+  test("Flatpak alone needs no system update", () => {
+    expect(run(["--flatpak"]).steps).toEqual(["LOCK", "FLATPAK"])
+  })
+  test("a Flatpak update that fails doesn't stop the system update", () => {
+    const { steps, stdout } = run(["--flatpak", "--system"], { STUB_FLATPAK_EXIT: "1" })
+    expect(steps).toEqual(["LOCK", "FLATPAK", "SYSTEM"])
+    expect(stdout).toContain("Flatpak apps were not updated")
   })
   test("reports the system update's result", () => {
     expect(run(["--system"], { STUB_SYSTEM_EXIT: "3" }).status).toBe(3)
